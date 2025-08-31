@@ -1,14 +1,15 @@
-// server.js - My First Express Server
+// server.js
 const express = require('express');
-const app = express();
-const PORT = 3000;
+require('dotenv').config(); // << เพิ่มบรรทัดนี้ที่ด้านบน
 
-// สร้าง Route (เส้นทาง) แรกสำหรับหน้าหลัก
+const app = express();
+const PORT = process.env.PORT || 3000; // << อ่านค่า PORT จาก .env
+const APP_NAME = process.env.APP_NAME;
+
 app.get('/', (req, res) => {
-  res.send('<h1>Hello from ENGSE203 Express Server!</h1>');
+  res.send(`<h1>Hello from ${APP_NAME}!</h1>`);
 });
 
-// เริ่มต้นให้ Server รอรับการเชื่อมต่อ
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
+  console.log(`🚀 ${APP_NAME} is running on http://localhost:${PORT}`);
 });
