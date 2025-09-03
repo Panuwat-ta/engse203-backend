@@ -9,7 +9,7 @@
 - npm install dotenv
 - คือเครื่องมือที่ช่วยโหลด "Environment Variables" (ค่าตัวแปรของระบบ) จากไฟล์ .env เข้าสู่ process.env ใน Node.js
 - npm install cors
-- ป็น Middleware ที่ช่วยจัดการเรื่อง Cross-Origin Resource Sharing
+- เป็น Middleware ที่ช่วยจัดการเรื่อง Cross-Origin Resource Sharing
 - npm install helmet 
 - เป็น Middleware ที่ช่วยตั้งค่า HTTP Headers ต่างๆ
 - npm install joi
