@@ -108,6 +108,15 @@
             <p>การใช้ Native APIs ของ Operating System</p>
         </div>
 
+        <!-- Agent Dashboard Section -->
+        <div class="section" id="agentDashboard">
+            <h3>👥 Agent Status Dashboard</h3>
+            <p>แสดงรายชื่อ agents แบบ real-time และเปลี่ยนสถานะได้จากหน้า UI</p>
+            <div id="agentList" style="margin-bottom: 15px;"></div>
+            <button class="button" onclick="exportAgentDashboard()">📊 Export Agent Report (CSV)</button>
+            <div class="result-box" id="agentDashboardResult">กดปุ่มเพื่อ export รายงาน agent</div>
+        </div>
+
         <!-- File Operations Section -->
         <div class="section">
             <h3>📁 File Operations</h3>
@@ -180,6 +189,63 @@
 
     <script>
         console.log('🎨 [RENDERER] Native APIs Demo โหลดแล้ว');
+
+        // --- Agent Dashboard Data ---
+        let agents = [
+            { id: 'AG001', name: 'Alice Johnson', status: 'Available', extension: '1001', department: 'Sales', totalCalls: 15, avgCallTime: 245 },
+            { id: 'AG002', name: 'Bob Smith', status: 'Busy', extension: '1002', department: 'Support', totalCalls: 8, avgCallTime: 312 },
+            { id: 'AG003', name: 'Carol Lee', status: 'Break', extension: '1003', department: 'Sales', totalCalls: 12, avgCallTime: 198 }
+        ];
+
+        function renderAgentList() {
+            const agentListDiv = document.getElementById('agentList');
+            agentListDiv.innerHTML = '';
+            agents.forEach((agent, idx) => {
+                agentListDiv.innerHTML += `
+                    <div style="display: flex; align-items: center; margin-bottom: 8px; gap: 10px;">
+                        <span style="width: 110px; font-weight: bold;">${agent.id}</span>
+                        <span style="width: 160px;">${agent.name}</span>
+                        <select onchange="changeAgentStatus(${idx}, this.value)" style="border-radius: 8px; padding: 4px 8px;">
+                            <option value="Available" ${agent.status === 'Available' ? 'selected' : ''}>🟢 Available</option>
+                            <option value="Busy" ${agent.status === 'Busy' ? 'selected' : ''}>🔴 Busy</option>
+                            <option value="Break" ${agent.status === 'Break' ? 'selected' : ''}>🟡 Break</option>
+                        </select>
+                        <span style="width: 90px;">Ext: ${agent.extension}</span>
+                        <span style="width: 110px;">Dept: ${agent.department}</span>
+                        <span style="width: 110px;">Calls: ${agent.totalCalls}</span>
+                        <span style="width: 110px;">Avg: ${agent.avgCallTime}s</span>
+                    </div>
+                `;
+            });
+        }
+
+        function changeAgentStatus(idx, newStatus) {
+            agents[idx].status = newStatus;
+            renderAgentList();
+            showResult('agentDashboardResult', `เปลี่ยนสถานะ ${agents[idx].name} เป็น ${newStatus}`, 'success');
+            // TODO: Trigger notification and sync with backend
+        }
+
+        function exportAgentDashboard() {
+            // Generate CSV
+            const csvRows = [
+                'Agent ID,Name,Status,Extension,Department,Total Calls,Avg Call Time'
+            ];
+            agents.forEach(agent => {
+                csvRows.push(`${agent.id},${agent.name},${agent.status},${agent.extension},${agent.department},${agent.totalCalls},${agent.avgCallTime}`);
+            });
+            const csvContent = csvRows.join('\n');
+            const fileName = `agent-dashboard-${new Date().toISOString().split('T')[0]}.csv`;
+            window.nativeAPI.saveFile(csvContent, fileName).then(result => {
+                if (result.success) {
+                    showResult('agentDashboardResult', `✅ Export สำเร็จ!\n\nชื่อไฟล์: ${result.fileName}`, 'success');
+                } else if (result.cancelled) {
+                    showResult('agentDashboardResult', '⏹️ ยกเลิกการ export', 'info');
+                } else {
+                    showResult('agentDashboardResult', `❌ Error: ${result.error}`, 'error');
+                }
+            });
+        }
 
         // ตรวจสอบ API
         if (window.nativeAPI) {
@@ -453,6 +519,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             console.log('📄 [RENDERER] DOM พร้อมแล้ว');
             showResult('fileResult', '✅ Native APIs Demo พร้อมใช้งาน\n\nกดปุ่มเพื่อทดสอบ file operations', 'success');
+            renderAgentList();
         });
     </script>
 </body>
