@@ -95,6 +95,52 @@
         .error {
             color: #ff6b6b;
         }
+
+        /* container */
+        .remember-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-size: 14px;
+            gap: 8px;
+            user-select: none;
+        }
+
+        /* hide original checkbox */
+        .remember-label input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* custom box */
+        .remember-label .checkmark {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #fff;
+            border-radius: 4px;
+            display: inline-block;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        /* tick when checked */
+        .remember-label input:checked+.checkmark {
+            background-color: #fff;
+            border-color: #fff;
+        }
+
+        .remember-label input:checked+.checkmark::after {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 0px;
+            width: 5px;
+            height: 10px;
+            border: solid #667eea;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
     </style>
 </head>
 
@@ -104,6 +150,38 @@
             <h1>🔄 IPC Communication Demo</h1>
             <p>การสื่อสารระหว่าง Main Process และ Renderer Process</p>
         </div>
+        <!-- Login Card -->
+    <div class="demo-section" id="loginCard">
+            <div class="input-group">
+                <h3>🔐 Login (Agent)</h3>
+                <label>Agent ID</label>
+                <input id="loginAgentId" placeholder="agent001">
+                <label>Password</label>
+                <input id="loginPassword" type="password" placeholder="password1">
+                <button class="button" id="btnLogin">Login</button>
+                <label class="remember-label">
+                    <input type="checkbox" id="rememberLogin">
+                    <span class="checkmark"></span>
+                    Remember me
+                </label>
+                <div id="loginMsg"></div>
+            </div>
+        </div>
+
+        <div class="demo-section" id="dashboardCard" style="display:none;">
+            <h3>👤 My Dashboard</h3>
+            <div id="myInfo"></div>
+            <label>เปลี่ยนสถานะ</label>
+            <select id="myStatus">
+                <option>Available</option>
+                <option>Busy</option>
+                <option>Break</option>
+                <option>Offline</option>
+            </select>
+            <button class="button" id="btnChangeMyStatus">เปลี่ยนสถานะ</button>
+            <div id="myStats"></div>
+        </div>
+
 
         <!-- Demo 1: ส่งข้อความพื้นฐาน -->
         <div class="demo-section">
@@ -187,6 +265,9 @@
     </div>
 
     <script>
+        function $(id) {
+            return document.getElementById(id);
+        }
         console.log('🎨 [RENDERER] กำลังโหลด...');
 
         // ตรวจสอบว่า electronAPI พร้อมใช้งาน
@@ -306,8 +387,10 @@
 
         // เพิ่มส่วนนี้ใน <script> ของ index.html
 
-        // ตัวแปรเก็บข้อมูล agents
-        let agentsData = null;
+    // ตัวแปรเก็บข้อมูล agents
+    let agentsData = null;
+    // ตัวแปรเก็บข้อมูล agent ที่ login
+    let currentAgent = null;
 
         // ฟังก์ชันโหลดข้อมูล agents
         async function loadAgents() {
@@ -443,6 +526,76 @@ ${response.message}`;
                 displayResult('agentResult', `Error: ${error.message}`, 'error');
             }
         }
+
+        function afterLogin() {
+            // Hide login card, show dashboard
+            document.getElementById('loginCard').style.display = 'none';
+            document.getElementById('dashboardCard').style.display = 'block';
+            updateMyInfo();
+            showToast('เข้าสู่ระบบสำเร็จ!');
+        }
+
+        // Helper to update agent info in dashboard
+        function updateMyInfo() {
+            if (!currentAgent) return;
+            document.getElementById('myInfo').textContent =
+                `Agent: ${currentAgent.name} (${currentAgent.id})\nStatus: ${currentAgent.status}`;
+        }
+
+        // Helper to show toast message (simple alert for now)
+        function showToast(msg) {
+            alert(msg);
+        }
+
+        $('btnLogin').addEventListener('click', async () => {
+            const id = $('loginAgentId').value;
+            const pw = $('loginPassword').value;
+            const remember = $('rememberLogin').checked;
+
+            const res = await window.electronAPI.authenticate(id, pw);
+            if (res.success) {
+                currentAgent = res.agent;
+                console.log('[DEBUG] currentAgent after login:', currentAgent);
+                if (remember) {
+                    localStorage.setItem('rememberAgentId', id);
+                    localStorage.setItem('rememberAgentPw', pw);
+                }
+                afterLogin();
+            } else {
+                $('loginMsg').textContent = res.error;
+            }
+        });
+
+        $('btnChangeMyStatus').addEventListener('click', async () => {
+            if (!currentAgent) {
+                showToast('กรุณาเข้าสู่ระบบก่อนเปลี่ยนสถานะ');
+                return;
+            }
+            const newStatus = $('myStatus').value;
+            // ใช้ currentAgent.id จาก login
+            const res = await window.electronAPI.changeAgentStatus(currentAgent.id, newStatus);
+            if (res.success) {
+                currentAgent.status = newStatus;
+                currentAgent.lastStatusChange = new Date().toISOString();
+                updateMyInfo();
+                showToast(`สถานะของคุณเปลี่ยนเป็น ${newStatus}`);
+                // โหลดข้อมูลใหม่เพื่อ sync dashboard
+                loadAgents();
+            } else {
+                showToast(res.error || 'เปลี่ยนสถานะไม่สำเร็จ');
+            }
+        });
+
+        window.electronAPI.onAgentStatusUpdated((payload) => {
+            const a = payload.agent;
+            if (!currentAgent || a.id !== currentAgent.id) {
+                showToast(`${a.name} เปลี่ยนสถานะเป็น ${a.status}`);
+            }
+            loadAgents();
+        });
+
+
+
 
     </script>
 </body>

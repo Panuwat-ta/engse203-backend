@@ -23,6 +23,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     changeAgentStatus: (agentId, newStatus) => {
         console.log(`🔄 [PRELOAD] เปลี่ยนสถานะ ${agentId} เป็น ${newStatus}`);
         return ipcRenderer.invoke('change-agent-status', { agentId, newStatus });
+    },
+
+    authenticate: (agentId, password) => ipcRenderer.invoke('authenticate', { agentId, password }),
+
+    // listener สำหรับรับ event เมื่อ agent เปลี่ยนสถานะ
+    onAgentStatusUpdated: (callback) => {
+        const listener = (event, payload) => callback(payload);
+        ipcRenderer.on('agent-status-updated', listener);
+        return () => ipcRenderer.removeListener('agent-status-updated', listener);
     }
 });
 

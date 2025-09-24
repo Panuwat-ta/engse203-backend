@@ -88,41 +88,39 @@ ipcMain.handle('get-agents', async () => {
     }
 });
 
-// 🔄 Handler สำหรับเปลี่ยนสถานะ agent
-ipcMain.handle('change-agent-status', async (event, { agentId, newStatus }) => {
-    console.log(`🔄 [MAIN] เปลี่ยนสถานะ agent ${agentId} เป็น ${newStatus}`);
+// ✅ เพิ่ม handler สำหรับ authentication
+ipcMain.handle('authenticate', async (event, { agentId, password }) => {
+    const credRaw = await fs.readFile(path.join(__dirname, 'credentials.json'), 'utf8');
+    const credentials = JSON.parse(credRaw);
 
-    try {
-        // อ่านข้อมูลปัจจุบัน
-        const data = await fs.readFile('agent-data.json', 'utf8');
-        const agentData = JSON.parse(data);
-
-        // หา agent และเปลี่ยนสถานะ
+    if (credentials[agentId] && credentials[agentId] === password) {
+        const dataRaw = await fs.readFile(path.join(__dirname, 'agent-data.json'), 'utf8');
+        const agentData = JSON.parse(dataRaw);
         const agent = agentData.agents.find(a => a.id === agentId);
-        if (agent) {
-            agent.status = newStatus;
-            agent.lastStatusChange = new Date().toISOString();
-
-            // บันทึกกลับไปยังไฟล์
-            await fs.writeFile('agent-data.json', JSON.stringify(agentData, null, 2));
-
-            console.log(`✅ [MAIN] เปลี่ยนสถานะ ${agentId} สำเร็จ`);
-            return {
-                success: true,
-                agent: agent,
-                message: `เปลี่ยนสถานะเป็น ${newStatus} แล้ว`
-            };
-        } else {
-            throw new Error(`ไม่พบ agent ID: ${agentId}`);
-        }
-
-    } catch (error) {
-        console.error('❌ [MAIN] Error เปลี่ยนสถานะ:', error);
-        return {
-            success: false,
-            error: error.message
-        };
+        return { success: true, agent, message: 'Authenticated' };
     }
+    return { success: false, error: 'Invalid credentials' };
+});
+
+// 🔄 Handler สำหรับเปลี่ยนสถานะ agent
+// ✅ แก้ change-agent-status ให้ broadcast กลับ renderer
+ipcMain.handle('change-agent-status', async (event, { agentId, newStatus }) => {
+    const filePath = path.join(__dirname, 'agent-data.json');
+    const dataRaw = await fs.readFile(filePath, 'utf8');
+    const agentData = JSON.parse(dataRaw);
+
+    const agent = agentData.agents.find(a => a.id === agentId);
+    agent.status = newStatus;
+    agent.lastStatusChange = new Date().toISOString();
+
+    await fs.writeFile(filePath, JSON.stringify(agentData, null, 2));
+
+    // ✅ ส่ง event กลับไปยัง renderer
+    BrowserWindow.getAllWindows().forEach(win => {
+        win.webContents.send('agent-status-updated', { agent, statistics: agentData.statistics });
+    });
+
+    return { success: true, agent, message: `เปลี่ยนสถานะเป็น ${newStatus} แล้ว` };
 });
 
 app.whenReady().then(() => {
