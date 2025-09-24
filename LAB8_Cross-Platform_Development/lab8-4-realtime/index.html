@@ -1,0 +1,1020 @@
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Wallboard - Real-time Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+        }
+
+        body[data-theme="light"] {
+            background: linear-gradient(135deg, #f9f9f9 0%, #ffffff 100%);
+            color: #2c3e50;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .widget {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        body[data-theme="light"] .widget {
+            background: rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        .widget h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.2em;
+            text-align: center;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .clock {
+            font-size: 2em;
+            text-align: center;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-available {
+            background: #2ecc71;
+        }
+
+        .status-busy {
+            background: #e74c3c;
+        }
+
+        .status-break {
+            background: #f39c12;
+        }
+
+        .status-offline {
+            background: #95a5a6;
+        }
+
+        .agent-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        body[data-theme="light"] .agent-item {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+
+        body[data-theme="light"] .button {
+            background: rgba(0, 0, 0, 0.2);
+            border: 2px solid #2c3e50;
+            color: #2c3e50;
+        }
+
+        .button:hover {
+            background: white;
+            color: #3498db;
+        }
+
+        body[data-theme="light"] .button:hover {
+            background: #2c3e50;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 0.9em;
+        }
+
+        .websocket-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .ws-connected {
+            background: rgba(46, 204, 113, 0.3);
+        }
+
+        .ws-disconnected {
+            background: rgba(231, 76, 60, 0.3);
+        }
+
+        .ws-connecting {
+            background: rgba(243, 156, 18, 0.3);
+        }
+
+        body[data-theme="light"] .ws-connected {
+            background: rgba(46, 204, 113, 0.1);
+        }
+
+        body[data-theme="light"] .ws-disconnected {
+            background: rgba(231, 76, 60, 0.1);
+        }
+
+        body[data-theme="light"] .ws-connecting {
+            background: rgba(243, 156, 18, 0.1);
+        }
+    </style>
+</head>
+
+<body data-theme="dark">
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header widget">
+            <h1>🏢 Agent Wallboard Dashboard</h1>
+            <p>Real-time Monitoring System</p>
+            <div class="clock" id="liveClock">กำลังโหลดเวลา...</div>
+            <button class="button" id="themeToggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+        </div>
+
+        <!-- Weather Widget -->
+        <div class="widget">
+            <h3>🌤️ สภาพอากาศ</h3>
+            <div id="weatherInfo" class="loading">กำลังโหลด...</div>
+            <button class="button" onclick="refreshWeather()">🔄 รีเฟรช</button>
+        </div>
+
+        <!-- System Status -->
+        <div class="widget">
+            <h3>⚡ WebSocket Status</h3>
+            <div id="websocketStatus" class="websocket-status ws-disconnected">
+                🔴 ไม่ได้เชื่อมต่อ
+            </div>
+            <button class="button" onclick="connectWebSocket()">🔌 เชื่อมต่อ</button>
+            <button class="button" onclick="sendTestMessage()">💬 ทดสอบ</button>
+        </div>
+
+        <!-- Real-time Clock -->
+        <div class="widget">
+            <h3>🕒 เวลาจาก API</h3>
+            <div id="apiTime" class="loading">กำลังโหลด...</div>
+            <button class="button" onclick="refreshTime()">🔄 รีเฟรช</button>
+        </div>
+
+        <!-- Agents List -->
+        <div class="widget" style="grid-column: span 2;">
+            <h3>👥 Agent Status (Mock Data)</h3>
+            <div id="agentsList" class="loading">กำลังโหลดรายชื่อ agents...</div>
+            <button class="button" onclick="refreshAgents()">🔄 รีเฟรช Agents</button>
+            <button class="button" onclick="startAutoRefresh()">⏰ Auto Refresh</button>
+            <button class="button" onclick="stopAutoRefresh()">⏹️ หยุด Auto</button>
+        </div>
+        <!-- Agent Simulator Widget -->
+        <div class="widget">
+            <h3>🎭 Agent Status Simulator</h3>
+            <p>จำลองการเปลี่ยนสถานะแบบ real-time</p>
+
+            <button class="button" onclick="startSimulator()">▶️ เริ่ม Simulator</button>
+            <button class="button" onclick="stopSimulator()">⏹️ หยุด Simulator</button>
+
+            <div id="simulatorStatus" style="margin-top: 15px;">
+                📍 Simulator ยังไม่ทำงาน
+            </div>
+
+            <div id="lastStatusChange" style="margin-top: 10px; font-size: 0.9em;">
+                รอการเปลี่ยนแปลง...
+            </div>
+        </div>
+        <div class="widget">
+            <h3>📊 Agent Status Chart</h3>
+            <canvas id="agentStatusChart" width="400" height="200"></canvas>
+            <button class="button" onclick="updateCharts()">🔄 Update Charts</button>
+        </div>
+        <div class="widget">
+            <h3>📈 Call Volume Chart</h3>
+            <canvas id="callVolumeChart" width="400" height="200"></canvas>
+        </div>
+        <div class="widget">
+            <h3>📊 สถิติและ Metrics</h3>
+            <div id="metricsInfo" class="loading">กำลังโหลด...</div>
+            <button class="button" onclick="refreshMetrics()">🔄 รีเฟรช Metrics</button>
+        </div>
+        <div class="widget">
+            <h3>🔔 Notification Settings</h3>
+            <div id="notificationStatus" style="margin-bottom: 15px;">
+                กำลังตรวจสอบสิทธิ์...
+            </div>
+            <button class="button" onclick="requestNotificationPermission()">🔔 test Notification</button>
+            <button class="button" onclick="testNotification()">🧪 ทดสอบ Notification</button>
+            <div style="margin-top: 10px;">
+                <label>
+                    <input type="checkbox" id="enableNotifications" checked> เปิดใช้ Notifications
+                </label>
+            </div>
+        </div>
+        <!-- Settings Widget -->
+        <div class="widget">
+            <h3>💾 Settings</h3>
+            <div style="margin-bottom: 15px;">
+                <label>
+                    <input type="number" id="refreshInterval" min="5" max="300" value="30" style="width: 60px;">
+                    Auto Refresh Interval (seconds)
+                </label>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label>
+                    <input type="checkbox" id="enableSounds" checked> เปิดเสียงแจ้งเตือน
+                </label>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label>
+                    <input type="checkbox" id="enableAnimations" checked> เปิดใช้ Animations
+                </label>
+            </div>
+            <button class="button" onclick="saveSettings()">💾 Save Settings</button>
+            <button class="button" onclick="loadSettings()">📂 Load Settings</button>
+            <button class="button" onclick="resetSettings()">🔄 Reset to Default</button>
+            <div id="settingsStatus" style="margin-top: 10px; font-size: 0.9em;"></div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🎨 [RENDERER] Real-time Dashboard โหลดแล้ว');
+
+        // Global variables
+        let websocket = null;
+        let autoRefreshInterval = null;
+        let clockInterval = null;
+        let notificationPermission = null;
+
+        // ===== WEBSOCKET FUNCTIONS =====
+
+        function connectWebSocket() {
+            try {
+                console.log('⚡ [RENDERER] เชื่อมต่อ WebSocket...');
+                updateWebSocketStatus('connecting', '🟡 กำลังเชื่อมต่อ...');
+
+                // เชื่อมต่อ WebSocket Echo Test
+                websocket = new WebSocket('wss://echo.websocket.org/');
+
+                websocket.onopen = function (event) {
+                    console.log('✅ [RENDERER] WebSocket เชื่อมต่อแล้ว');
+                    updateWebSocketStatus('connected', '🟢 เชื่อมต่อแล้ว');
+
+                    // ส่งข้อความต้อนรับ
+                    websocket.send(JSON.stringify({
+                        type: 'wallboard_connected',
+                        message: 'Agent Wallboard เชื่อมต่อแล้ว',
+                        timestamp: new Date().toISOString()
+                    }));
+                };
+
+                websocket.onmessage = function (event) {
+                    console.log('📨 [RENDERER] ได้รับข้อความ:', event.data);
+
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (error) {
+                        console.log('📨 [RENDERER] Text message:', event.data);
+                    }
+                };
+
+                websocket.onclose = function (event) {
+                    console.log('🔴 [RENDERER] WebSocket ปิดการเชื่อมต่อ');
+                    updateWebSocketStatus('disconnected', '🔴 ไม่ได้เชื่อมต่อ');
+                    websocket = null;
+                };
+
+                websocket.onerror = function (error) {
+                    console.error('❌ [RENDERER] WebSocket error:', error);
+                    updateWebSocketStatus('disconnected', '❌ เกิดข้อผิดพลาด');
+                };
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+                updateWebSocketStatus('disconnected', '❌ เชื่อมต่อไม่ได้');
+            }
+        }
+
+        function sendTestMessage() {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const testMessage = {
+                    type: 'agent_status_update',
+                    agentId: 'AG001',
+                    newStatus: 'Available',
+                    timestamp: new Date().toISOString(),
+                    message: 'ทดสอบข้อความจาก Agent Wallboard'
+                };
+
+                console.log('💬 [RENDERER] ส่งข้อความทดสอบ...');
+                websocket.send(JSON.stringify(testMessage));
+            } else {
+                alert('❌ กรุณาเชื่อมต่อ WebSocket ก่อน');
+            }
+        }
+
+        function updateWebSocketStatus(status, message) {
+            const statusEl = document.getElementById('websocketStatus');
+            statusEl.className = `websocket-status ws-${status}`;
+            statusEl.textContent = message;
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('🔄 [RENDERER] ประมวลผลข้อความ:', data);
+
+            // จำลองการอัพเดท agent status แบบ real-time
+            if (data.type === 'agent_status_update') {
+                showNotification(`🔄 ${data.agentId} เปลี่ยนสถานะเป็น ${data.newStatus}`);
+            }
+        }
+
+        // ===== API FUNCTIONS =====
+
+        async function refreshTime() {
+            try {
+                console.log('🕒 [RENDERER] รีเฟรชเวลา...');
+                document.getElementById('apiTime').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+
+                const timeData = await window.realtimeAPI.getWorldTime();
+
+                if (timeData && timeData.success) {
+                    document.getElementById('apiTime').innerHTML = `
+                <strong>🕒 ${timeData.formatted}</strong><br>
+                <small>Timezone: ${timeData.timezone}</small>
+            `;
+                } else {
+                    // Fallback data
+                    const fallbackTime = new Date().toLocaleString('th-TH');
+                    document.getElementById('apiTime').innerHTML = `
+                <div class="error">❌ ${timeData?.error || 'API ไม่ตอบสนอง'}</div>
+                <div>Fallback: ${fallbackTime}</div>
+            `;
+                }
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+                // Fallback data
+                const fallbackTime = new Date().toLocaleString('th-TH');
+                document.getElementById('apiTime').innerHTML = `<div class="error">❌ ${error.message}</div><div>Fallback: ${fallbackTime}</div>`;
+            }
+        }
+
+        async function refreshWeather() {
+            try {
+                console.log('🌤️ [RENDERER] รีเฟรชสภาพอากาศ...');
+                document.getElementById('weatherInfo').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+
+                const weatherData = await window.realtimeAPI.getWeather();
+
+                if (weatherData && weatherData.success) {
+                    document.getElementById('weatherInfo').innerHTML = `
+                <strong>📍 ${weatherData.location}</strong><br>
+                🌡️ ${weatherData.temperature}<br>
+                ☁️ ${weatherData.description}<br>
+                💧 ความชื้น: ${weatherData.humidity}
+            `;
+                } else {
+                    // Fallback data
+                    const fallback = weatherData?.fallback || {
+                        location: 'Bangkok',
+                        temperature: '30°C',
+                        description: 'Clear sky',
+                        humidity: '60%'
+                    };
+                    document.getElementById('weatherInfo').innerHTML = `
+                <div class="error">⚠️ ${weatherData?.error || 'API ไม่ตอบสนอง'}</div>
+                <div><strong>📍 ${fallback.location}</strong><br>
+                🌡️ ${fallback.temperature}<br>
+                ☁️ ${fallback.description}<br>
+                💧 ความชื้น: ${fallback.humidity}</div>
+            `;
+                }
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+                // Fallback data
+                document.getElementById('weatherInfo').innerHTML = `
+            <div class="error">❌ ${error.message}</div>
+            <div><strong>📍 Bangkok</strong><br>
+            🌡️ 30°C<br>
+            ☁️ Clear sky<br>
+            💧 ความชื้น: 60%</div>
+        `;
+            }
+        }
+
+        async function refreshAgents() {
+            try {
+                console.log('👥 [RENDERER] รีเฟรช agents...');
+                document.getElementById('agentsList').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+
+                const agentData = await window.realtimeAPI.getMockAgents();
+
+                if (agentData && agentData.success) {
+                    let agentsHTML = '';
+                    agentData.agents.forEach(agent => {
+                        const statusClass = `status-${agent.status.toLowerCase()}`;
+                        agentsHTML += `
+                    <div class="agent-item">
+                        <div>
+                            <span class="status-indicator ${statusClass}"></span>
+                            <strong>${agent.name}</strong> (${agent.id})
+                        </div>
+                        <div>
+                            ${agent.status} | Ext: ${agent.extension}
+                        </div>
+                    </div>
+                `;
+                    });
+
+                    agentsHTML += `<div style="margin-top: 15px; font-size: 0.9em;">
+                📊 Total: ${agentData.count} agents
+                ${agentData.fallback ? ' (Fallback data)' : ' (Live from API)'}
+            </div>`;
+
+                    document.getElementById('agentsList').innerHTML = agentsHTML;
+                } else {
+                    // Fallback data
+                    const fallbackAgents = [
+                        { id: 'AG001', name: 'Agent One', status: 'Available', extension: '1001' },
+                        { id: 'AG002', name: 'Agent Two', status: 'Busy', extension: '1002' },
+                        { id: 'AG003', name: 'Agent Three', status: 'Break', extension: '1003' }
+                    ];
+                    let agentsHTML = '';
+                    fallbackAgents.forEach(agent => {
+                        const statusClass = `status-${agent.status.toLowerCase()}`;
+                        agentsHTML += `
+                    <div class="agent-item">
+                        <div>
+                            <span class="status-indicator ${statusClass}"></span>
+                            <strong>${agent.name}</strong> (${agent.id})
+                        </div>
+                        <div>
+                            ${agent.status} | Ext: ${agent.extension}
+                        </div>
+                    </div>
+                `;
+                    });
+                    agentsHTML += `<div style="margin-top: 15px; font-size: 0.9em;">
+                📊 Total: ${fallbackAgents.length} agents (Fallback data)
+            </div>`;
+                    document.getElementById('agentsList').innerHTML = agentsHTML;
+                }
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+                // Fallback data
+                const fallbackAgents = [
+                    { id: 'AG001', name: 'Agent One', status: 'Available', extension: '1001' },
+                    { id: 'AG002', name: 'Agent Two', status: 'Busy', extension: '1002' },
+                    { id: 'AG003', name: 'Agent Three', status: 'Break', extension: '1003' }
+                ];
+                let agentsHTML = '';
+                fallbackAgents.forEach(agent => {
+                    const statusClass = `status-${agent.status.toLowerCase()}`;
+                    agentsHTML += `
+                <div class="agent-item">
+                    <div>
+                        <span class="status-indicator ${statusClass}"></span>
+                        <strong>${agent.name}</strong> (${agent.id})
+                    </div>
+                    <div>
+                        ${agent.status} | Ext: ${agent.extension}
+                    </div>
+                </div>
+            `;
+                });
+                agentsHTML += `<div style="margin-top: 15px; font-size: 0.9em;">
+            📊 Total: ${fallbackAgents.length} agents (Fallback data)
+        </div>`;
+                document.getElementById('agentsList').innerHTML = agentsHTML;
+            }
+        }
+
+        // ===== SIMULATOR FUNCTIONS =====
+
+        async function startSimulator() {
+            try {
+                console.log('🎭 [RENDERER] เริ่ม simulator...');
+
+                const result = await window.realtimeAPI.startSimulator();
+
+                if (result.success) {
+                    document.getElementById('simulatorStatus').innerHTML = '🟢 Simulator ทำงานอยู่';
+                    showNotification('🎭 Agent Status Simulator เริ่มทำงานแล้ว');
+                }
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+            }
+        }
+
+        async function stopSimulator() {
+            try {
+                console.log('⏹️ [RENDERER] หยุด simulator...');
+
+                const result = await window.realtimeAPI.stopSimulator();
+
+                if (result.success) {
+                    document.getElementById('simulatorStatus').innerHTML = '🔴 Simulator หยุดแล้ว';
+                    showNotification('⏹️ Agent Status Simulator หยุดแล้ว');
+                }
+
+            } catch (error) {
+                console.error('❌ [RENDERER] Error:', error);
+            }
+        }
+
+        // รับ event การเปลี่ยนสถานะจาก simulator
+        window.realtimeAPI.onAgentStatusChanged((data) => {
+            console.log('📡 [RENDERER] Agent status changed:', data);
+
+            // อัพเดท UI
+            document.getElementById('lastStatusChange').innerHTML = `
+    🔄 <strong>${data.agentId}</strong> → ${data.newStatus}<br>
+    <small>⏰ ${new Date(data.timestamp).toLocaleTimeString('th-TH')}</small>
+  `;
+
+            // แสดง notification
+            showNotification(`🔄 ${data.agentId} เปลี่ยนเป็น ${data.newStatus}`);
+
+            // รีเฟรช agents list
+            refreshAgents();
+        });
+
+        async function refreshMetrics() {
+            try {
+                document.getElementById('metricsInfo').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+                // ตัวอย่าง: ดึง metrics จาก API (หรือ mock)
+                const metricsData = await (window.realtimeAPI.getMetrics?.() || Promise.resolve({
+                    success: false
+                }));
+
+                if (metricsData && metricsData.success) {
+                    document.getElementById('metricsInfo').innerHTML = `
+                <strong>Agents Online:</strong> ${metricsData.agentsOnline}<br>
+                <strong>Agents Busy:</strong> ${metricsData.agentsBusy}<br>
+                <strong>Agents on Break:</strong> ${metricsData.agentsBreak}<br>
+                <strong>Average Response Time:</strong> ${metricsData.avgResponseTime} sec
+            `;
+                } else {
+                    // fallback metrics
+                    document.getElementById('metricsInfo').innerHTML = `
+                <div class="error">❌ ไม่สามารถโหลด Metrics ได้</div>
+                <div>
+                    <strong>Agents Online:</strong> 2<br>
+                    <strong>Agents Busy:</strong> 1<br>
+                    <strong>Agents on Break:</strong> 1<br>
+                    <strong>Average Response Time:</strong> 15 sec
+                </div>
+            `;
+                }
+            } catch (error) {
+                document.getElementById('metricsInfo').innerHTML = `
+            <div class="error">❌ ${error.message}</div>
+            <div>
+                <strong>Agents Online:</strong> 2<br>
+                <strong>Agents Busy:</strong> 1<br>
+                <strong>Agents on Break:</strong> 1<br>
+                <strong>Average Response Time:</strong> 15 sec
+            </div>
+        `;
+            }
+        }
+
+        // ===== CHART FUNCTIONS =====
+
+        let agentStatusChart = null;
+        let callVolumeChart = null;
+
+        function initializeCharts() {
+            // Agent Status Pie Chart
+            const statusCtx = document.getElementById('agentStatusChart').getContext('2d');
+            agentStatusChart = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Available', 'Busy', 'Break', 'Offline'],
+                    datasets: [{
+                        data: [3, 2, 1, 1],
+                        backgroundColor: [
+                            '#2ecc71', // Available - Green
+                            '#e74c3c', // Busy - Red
+                            '#f39c12', // Break - Orange
+                            '#95a5a6'  // Offline - Gray
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#fff',
+                                font: {
+                                    size: 12
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Call Volume Line Chart
+            const volumeCtx = document.getElementById('callVolumeChart').getContext('2d');
+            callVolumeChart = new Chart(volumeCtx, {
+                type: 'line',
+                data: {
+                    labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+                    datasets: [{
+                        label: 'Calls per Hour',
+                        data: [12, 8, 25, 45, 38, 22],
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#fff'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#fff'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function updateCharts() {
+            try {
+                console.log('📈 [RENDERER] Updating charts...');
+                
+                // Get current agent data
+                const agentData = await window.realtimeAPI.getMockAgents();
+                
+                if (agentData && agentData.success) {
+                    // Count agents by status
+                    const statusCounts = {
+                        Available: 0,
+                        Busy: 0,
+                        Break: 0,
+                        Offline: 0
+                    };
+                    
+                    agentData.agents.forEach(agent => {
+                        if (statusCounts.hasOwnProperty(agent.status)) {
+                            statusCounts[agent.status]++;
+                        }
+                    });
+                    
+                    // Update pie chart
+                    if (agentStatusChart) {
+                        agentStatusChart.data.datasets[0].data = [
+                            statusCounts.Available,
+                            statusCounts.Busy,
+                            statusCounts.Break,
+                            statusCounts.Offline
+                        ];
+                        agentStatusChart.update();
+                    }
+                }
+                
+                // Update call volume with simulated data
+                if (callVolumeChart) {
+                    const newData = Array.from({length: 6}, () => Math.floor(Math.random() * 50) + 10);
+                    callVolumeChart.data.datasets[0].data = newData;
+                    callVolumeChart.update();
+                }
+                
+                showNotification('📈 Charts updated successfully!');
+                
+            } catch (error) {
+                console.error('❌ [RENDERER] Chart update error:', error);
+            }
+        }
+
+        // ===== AUTO REFRESH FUNCTIONS =====
+
+        function startAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+
+            console.log('⏰ [RENDERER] เริ่ม auto refresh...');
+
+            // ใช้ interval จากการตั้งค่า
+            const refreshInterval = parseInt(localStorage.getItem('refreshInterval') || '30') * 1000;
+
+            autoRefreshInterval = setInterval(() => {
+                console.log('🔄 [RENDERER] Auto refresh...');
+                refreshAgents();
+                refreshTime();
+                updateCharts();
+            }, refreshInterval);
+
+            showNotification(`⏰ เริ่ม Auto Refresh แล้ว (ทุก ${refreshInterval/1000} วินาที)`);
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                console.log('⏹️ [RENDERER] หยุด auto refresh');
+                showNotification('⏹️ หยุด Auto Refresh แล้ว');
+            }
+        }
+
+        // ===== THEME FUNCTIONS =====
+
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.getElementById('themeToggle');
+            
+            if (body.getAttribute('data-theme') === 'light') {
+                body.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '☀️ Light Mode';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                themeToggle.textContent = '🌙 Dark Mode';
+                localStorage.setItem('theme', 'light');
+            }
+            
+            // Update charts colors if they exist
+            updateChartsTheme();
+        }
+
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            const body = document.body;
+            const themeToggle = document.getElementById('themeToggle');
+            
+            body.setAttribute('data-theme', savedTheme);
+            
+            if (savedTheme === 'light') {
+                themeToggle.textContent = '🌙 Dark Mode';
+            } else {
+                themeToggle.textContent = '☀️ Light Mode';
+            }
+        }
+
+        function updateChartsTheme() {
+            const isDark = document.body.getAttribute('data-theme') !== 'light';
+            const textColor = isDark ? '#fff' : '#2c3e50';
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            
+            if (agentStatusChart) {
+                agentStatusChart.options.plugins.legend.labels.color = textColor;
+                agentStatusChart.update();
+            }
+            
+            if (callVolumeChart) {
+                callVolumeChart.options.scales.x.ticks.color = textColor;
+                callVolumeChart.options.scales.y.ticks.color = textColor;
+                callVolumeChart.options.scales.x.grid.color = gridColor;
+                callVolumeChart.options.scales.y.grid.color = gridColor;
+                callVolumeChart.options.plugins.legend.labels.color = textColor;
+                callVolumeChart.update();
+            }
+        }
+
+        // ===== UTILITY FUNCTIONS =====
+
+        function updateLiveClock() {
+            const now = new Date();
+            document.getElementById('liveClock').textContent = now.toLocaleString('th-TH');
+        }
+
+        function showNotification(message) {
+            // ตรวจสอบว่าผู้ใช้เปิดใช้ notifications หรือไม่
+            const enableNotifications = document.getElementById('enableNotifications')?.checked;
+            if (!enableNotifications) {
+                console.log('🔔 [NOTIFICATION DISABLED]', message);
+                return;
+            }
+
+            // ขออนุญาติแสดง notification
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(permission => {
+                    notificationPermission = permission;
+                    updateNotificationStatus();
+                    if (permission === 'granted') {
+                        // แสดง notification
+                        new Notification('Agent Wallboard', {
+                            body: message,
+                            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%233498db"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="30">🏢</text></svg>',
+                            tag: 'agent-status'
+                        });
+                    }
+                });
+            } else if (Notification.permission === 'granted') {
+                // แสดง notification
+                new Notification('Agent Wallboard', {
+                    body: message,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="%233498db"/><text x="50" y="60" text-anchor="middle" fill="white" font-size="30">🏢</text></svg>',
+                    tag: 'agent-status'
+                });
+            } else {
+                console.log('🔔 [NOTIFICATION BLOCKED]', message);
+            }
+        }
+
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    notificationPermission = permission;
+                    updateNotificationStatus();
+                    if (permission === 'granted') {
+                        showNotification('✅ Notification permission granted!');
+                    }
+                });
+            } else {
+                alert('❌ Browser ไม่รองรับ Notifications');
+            }
+        }
+
+        function testNotification() {
+            showNotification('🧪 นี่คือการทดสอบ Notification - Agent AG001 เปลี่ยนสถานะเป็น Available');
+        }
+
+        function updateNotificationStatus() {
+            const statusEl = document.getElementById('notificationStatus');
+            if (!('Notification' in window)) {
+                statusEl.innerHTML = '❌ Browser ไม่รองรับ Notifications';
+                statusEl.style.color = '#e74c3c';
+            } else if (Notification.permission === 'granted') {
+                statusEl.innerHTML = '✅ Notifications';
+                statusEl.style.color = '#2ecc71';
+            } else if (Notification.permission === 'denied') {
+                statusEl.innerHTML = '❌ Notifications ถูกปฏิเสธ';
+                statusEl.style.color = '#e74c3c';
+            } else {
+                statusEl.innerHTML = '⚠️ รอการอนุญาติ Notifications';
+                statusEl.style.color = '#f39c12';
+            }
+        }
+
+        // ===== SETTINGS FUNCTIONS =====
+
+        function saveSettings() {
+            const refreshInterval = parseInt(document.getElementById('refreshInterval').value);
+            const enableSounds = document.getElementById('enableSounds').checked;
+            const enableAnimations = document.getElementById('enableAnimations').checked;
+
+            localStorage.setItem('refreshInterval', refreshInterval);
+            localStorage.setItem('enableSounds', enableSounds);
+            localStorage.setItem('enableAnimations', enableAnimations);
+
+            showNotification('💾 Settings saved successfully!');
+        }
+
+        function loadSettings() {
+            const refreshInterval = localStorage.getItem('refreshInterval');
+            const enableSounds = localStorage.getItem('enableSounds');
+            const enableAnimations = localStorage.getItem('enableAnimations');
+
+            if (refreshInterval) {
+                document.getElementById('refreshInterval').value = refreshInterval;
+            }
+
+            if (enableSounds === 'true') {
+                document.getElementById('enableSounds').checked = true;
+            } else {
+                document.getElementById('enableSounds').checked = false;
+            }
+
+            if (enableAnimations === 'true') {
+                document.getElementById('enableAnimations').checked = true;
+            } else {
+                document.getElementById('enableAnimations').checked = false;
+            }
+
+            showNotification('📂 Settings loaded successfully!');
+        }
+
+        function resetSettings() {
+            localStorage.removeItem('refreshInterval');
+            localStorage.removeItem('enableSounds');
+            localStorage.removeItem('enableAnimations');
+
+            document.getElementById('refreshInterval').value = 30;
+            document.getElementById('enableSounds').checked = true;
+            document.getElementById('enableAnimations').checked = true;
+
+            showNotification('🔄 Settings reset to default!');
+        }
+
+        // ===== INITIALIZATION =====
+
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('📄 [RENDERER] DOM พร้อมแล้ว');
+
+            // เริ่มต้น live clock
+            clockInterval = setInterval(updateLiveClock, 1000);
+            updateLiveClock();
+
+            // ตรวจสอบสถานะ notification
+            updateNotificationStatus();
+
+            // โหลดการตั้งค่า
+            loadSettings();
+
+            // โหลดข้อมูลเริ่มต้น
+            refreshTime();
+            refreshWeather();
+            refreshAgents();
+            refreshMetrics();
+
+            initializeCharts();
+            initializeTheme();
+
+            console.log('✅ [RENDERER] Dashboard พร้อมใช้งาน');
+        });
+
+        // Cleanup เมื่อปิด window
+        window.addEventListener('beforeunload', () => {
+            console.log('🔄 [RENDERER] ทำความสะอาด...');
+
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+
+            if (clockInterval) {
+                clearInterval(clockInterval);
+            }
+
+            if (websocket) {
+                websocket.close();
+            }
+        });
+    </script>
+</body>
+
+</html>
