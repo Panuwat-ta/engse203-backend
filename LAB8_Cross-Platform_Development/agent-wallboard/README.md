@@ -5,7 +5,8 @@
 
 
 ## setup app
-<img width="1919" height="1021" alt="image" src="https://github.com/user-attachments/assets/b28e9713-585d-4c8c-943c-93019e878c5b" />
+<img width="614" height="481" alt="image" src="https://github.com/user-attachments/assets/4e95f129-a882-4089-91ec-cbfad1c8b092" />
+
 
 
 ## run app
